@@ -1,6 +1,7 @@
 /* eslint-env jest */
+/* eslint @typescript-eslint/no-var-requires: off */
 
-import * as V from "./index.js";
+const V = require("./index.js");
 
 // ------------------------------------------------------------------------------------------------
 
