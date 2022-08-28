@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "module": "es2020",
+    "skipLibCheck": true,
+    "noImplicitAny": true,
+    "preserveConstEnums": true,
+    "target": "es6",
+    "declaration": true,
+    "lib": ["es2021", "dom"]
+  }
+}
