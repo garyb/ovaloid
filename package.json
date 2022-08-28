@@ -1,6 +1,6 @@
 {
   "name": "ovaloid",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An options validator/parser thing.",
   "main": "index.js",
   "scripts": {
@@ -8,7 +8,10 @@
     "test": "jest",
     "ci": "tsc && eslint && jest"
   },
-  "files": ["index.js", "index.d.ts"],
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
   "license": "MIT",
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.35.1",
