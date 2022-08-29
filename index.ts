@@ -65,7 +65,7 @@ const printError = (path: Path, err: CompileError): string =>
   printPath(path) + (Array.isArray(err) ? err.flat().join("\n  ") : err);
 
 const printPath = (path: Path): string =>
-  path.length > 0 ? `At ${printCode(path.join("."))}: ` : ""
+  path.length > 0 ? `At ${printCode(path.join("."))}: ` : "";
 
 const printCode = (name: string): string =>
   "`" + name + "`";
@@ -80,7 +80,7 @@ const printValue = (v: unknown): string => {
   const objName = `[object ${Object.getPrototypeOf(v).constructor.name}]`;
   const className = getClassName(v);
   if (objName == className && !(v instanceof Date)) return JSON.stringify(v);
-  return objName + " " + JSON.stringify(v);
+  return `${objName} ${JSON.stringify(v)}`;
 }
 
 const ensure = (b: boolean, path: Path, fn: () => CompileError) => {
@@ -101,7 +101,7 @@ export const basicValidators = {
 
 const compileBasic = (name: BasicValidator, path: Path): FnV => {
   const v = basicValidators[name];
-  ensure(v != null, path, () => ["Unknown basic validator: " + printValue(name)]);
+  ensure(v != null, path, () => [`Unknown basic validator: ${printValue(name)}`]);
   return v;
 };
 
@@ -115,9 +115,9 @@ export const from = (f: (value: unknown) => Result): FunctionValidator => {
     try {
       const result = f(value);
       if (result instanceof Result) return result;
-      return fail("Function passed to `V.from` did not return a Result: " + printValue(result));
+      return fail(`Function passed to \`V.from\` did not return a Result: ${printValue(result)}`);
     } catch (e) {
-      return fail("Function passed to `V.from` threw an error: " + (e?.message || e));
+      return fail(`Function passed to \`V.from\` threw an error: ${e?.message || e}`);
     }
   }
   return { type: functionType, fn };
@@ -138,7 +138,7 @@ const compileOptional = (inner: Validator, fallback: unknown, path: Path): FnV =
   ensure(validatedFallback.ok, path, () => [
     "Fallback for optional value does not meet its own requirements:",
     validatedFallback.reasons.map(indent),
-    "(Provided value: " + printValue(fallback) + ")"
+    `(Provided value: ${printValue(fallback)})`
   ]);
   return (x) => x == null ? ok(validatedFallback.value) : v(x);
 };
@@ -160,10 +160,8 @@ export const mkEnum = (options: unknown[]): EnumValidator => {
 export { mkEnum as enum };
 
 const compileEnum = (options: unknown[], path: Path): FnV => {
-  ensure(Array.isArray(options), path, () => [
-    "`V.enum` expects an array of options as an argument, received: " + printValue(options)
-  ]);
-  const err = "Expected one of: " + options.map(opt => printValue(opt)).join(", ");
+  ensure(Array.isArray(options), path, () => [`\`V.enum\` expects an array of options as an argument, received: ${printValue(options)}`]);
+  const err = `Expected one of: ${options.map(opt => printValue(opt)).join(", ")}`;
   return predicate(x => options.includes(x), err);
 };
 
@@ -183,9 +181,9 @@ const compileObject = (fields: [string, Validator][], path: Path): FnV => {
   return (x) => {
     const keys = Object.keys(x);
     const missingKeys = requiredKeys.filter(k => !keys.includes(k));
-    if (missingKeys.length > 0) return fail("Missing expected properties: " + missingKeys.map(printCode).join(", "));
+    if (missingKeys.length > 0) return fail(`Missing expected properties: ${missingKeys.map(printCode).join(", ")}`);
     const unexpectedKeys = keys.filter(k => !expectedKeys.includes(k));
-    if (unexpectedKeys.length > 0) return fail("Found unexpected properties: " + unexpectedKeys.map(printCode).join(", "));
+    if (unexpectedKeys.length > 0) return fail(`Found unexpected properties: ${unexpectedKeys.map(printCode).join(", ")}`);
     return Result.gather(propValidators.map(v => v(x))).map(entries => Object.fromEntries(entries as [string, unknown][]));
   };
 };
@@ -202,9 +200,31 @@ export const array = (entries: Validator[]): IndexedValidator => {
 const compileIndexed = (entries: Validator[], path: Path): FnV => {
   const expectedLength = entries.length;
   const indexedValidators = entries.map((v, ix) => underIndex(ix, compile(v, path.concat([ix]))));
-  const err = expectedLength == 1 ? "Expected array with one entry" : "Expected array with " + expectedLength + " entries";
+  const err = expectedLength == 1 ? "Expected array with one entry" : `Expected array with ${expectedLength} entries`;
   return (x: unknown[]) =>
     x.length !== expectedLength ? fail(err) : Result.gather(indexedValidators.map(v => v(x)));
+};
+
+// ------------------------------------------------------------------------------------------------
+
+const oneOfType = "oneOf";
+type OneOfValidator = { type: typeof oneOfType, branches: Validator[] }
+
+export const oneOf = (branches: Validator[]): OneOfValidator => {
+  return { type: oneOfType, branches };
+};
+
+const compileOneOf = (branches: Validator[], path: Path): FnV => {
+  const vs = branches.map(v => compile(v, path));
+  return (x) => {
+    const failures = [];
+    for (const v of vs) {
+      const result = v(x);
+      if (result.ok) return result;
+      failures.push(result.reasons);
+    }
+    return fail(failures.flatMap((rs, ix) => rs.map(r => `At branch ${ix}: ${r}`)));
+  };
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -216,6 +236,7 @@ type ValidatorType
   | typeof functionType
   | typeof objectType
   | typeof indexedType
+  | typeof oneOfType
 
 const stepType = (v: ValidatorStep): ValidatorType =>
   typeof v == "string" ? v : v?.type;
@@ -236,6 +257,7 @@ type ValidatorStep
   | FunctionValidator
   | ObjectValidator
   | IndexedValidator
+  | OneOfValidator
 
 const compileStep = (v: ValidatorStep, path: Path): FnV => {
   if (typeof v == "string") return compileBasic(v, path);
@@ -245,9 +267,8 @@ const compileStep = (v: ValidatorStep, path: Path): FnV => {
   if (type == enumType) return compileEnum(v.options, path);
   if (type == objectType) return compileObject(v.fields, path);
   if (type == indexedType) return compileIndexed(v.entries, path);
-  throw new Error(printError(path, [
-    "Could not compile unrecognised validator definition: " + printValue(v)
-  ]));
+  if (type == oneOfType) return compileOneOf(v.branches, path);
+  throw new Error(printError(path, [`Could not compile unrecognised validator definition: ${printValue(v)}`]));
 };
 
 type Validator = ValidatorStep | ValidatorStep[]
@@ -259,16 +280,10 @@ export const compile = (input: Validator, path: Path = []): FnV => {
     rest.reduce((prevType, curr) => {
       const currType = stepType(curr);
       if (isCompatible(prevType, currType)) return currType;
-      throw new Error(printError(path, [
-        "Validator type `" + currType + "` cannot follow `" + prevType + "`"
-      ]));
+      throw new Error(printError(path, [`Validator type ${printCode(currType)} cannot follow ${printCode(prevType)}`]));
     }, type);
-    if (type == objectType) {
-      return mergeValidators(input, objectType, (v => (v as ObjectValidator).fields), compileObject, path);
-    }
-    if (type == enumType) {
-      return mergeValidators(input, enumType, (v => (v as EnumValidator).options), compileEnum, path);
-    }
+    if (type == objectType) return mergeValidators(input, objectType, (v => (v as ObjectValidator).fields), compileObject, path);
+    if (type == enumType) return mergeValidators(input, enumType, (v => (v as EnumValidator).options), compileEnum, path);
     return sequence(input.map(v => compileStep(v, path)));
   }
   return compileStep(input, path);

@@ -201,6 +201,19 @@ describe("indexed validator", () => {
 
 // ------------------------------------------------------------------------------------------------
 
+describe("oneOf validator", () => {
+  const v = V.compile(V.oneOf(["string", "number", V.array(["boolean", "boolean"])]));
+  test("should accept the first valid branch", () => {
+    expect(v("a")).toEqual(V.ok("a"));
+    expect(v(3)).toEqual(V.ok(3));
+  });
+  test("should fail if no branch matches", () => {
+    expect(v(["huh", true])).toEqual(V.fail(["At branch 0: Not a string", "At branch 1: Not a number", "At branch 2: At `0`: Not a boolean"]));
+  });
+})
+
+// ------------------------------------------------------------------------------------------------
+
 describe("chained rules", () => {
   describe("compilation", () => {
     test("should fail when incompatible validators are combined", () => {
