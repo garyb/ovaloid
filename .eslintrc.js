@@ -15,7 +15,19 @@ module.exports = {
     "plugin:@typescript-eslint/recommended"
   ],
   "rules": {
-    "no-constant-condition": "off",
-    "no-useless-escape": "off"
-  }
+    "semi": "off",
+    "@typescript-eslint/semi": "warn",
+    "comma-dangle": "off",
+    "@typescript-eslint/comma-dangle": ["warn", "always-multiline"],
+    "@typescript-eslint/member-delimiter-style": ["warn", {
+      multiline: {
+        delimiter: "none",
+        requireLast: false,
+      },
+      singleline: {
+        delimiter: "comma",
+        requireLast: false,
+      },
+    }],
+  },
 };
