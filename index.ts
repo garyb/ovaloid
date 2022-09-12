@@ -51,16 +51,23 @@ export class Result {
     return this.ok ? new Result(true, f(this.value)) : this;
   }
 
-  at (path: Path): Result {
-    return this.ok ? this : new Result(false, this.errors.map(e => e.under(path)));
+  at (path: Path | string | number): Result {
+    const p = parsePath(path);
+    if (p.length == 0) return this;
+    return this.ok ? this : new Result(false, this.errors.map(e => e.under(p)));
   }
 }
 
 export const ok = (value: unknown): Result =>
   new Result(true, value);
 
-export const fail = (error: string, path: Path, details?: ErrorDetails): Result =>
-  new Result(false, [new VError(path || [], error, details)]);
+export const fail = (error: string | string[], path: Path | string | number, details?: ErrorDetails): Result => {
+  const p = parsePath(path);
+  const errors = Array.isArray(error)
+    ? error.map(e => new VError(p, e, details))
+    : [new VError(p, error, details)];
+  return new Result(false, errors);
+};
 
 export const gather = (results: Result[]): Result => {
   const errors: Result[] = results.filter(r => !r.ok);
@@ -76,6 +83,13 @@ type FnV = (value: unknown) => Result;
 // ------------------------------------------------------------------------------------------------
 
 type Path = (string | number)[];
+
+const parsePath = (input: Path | string | number): Path => {
+  if (Array.isArray(input)) return input;
+  if (typeof input == "string") return input.split(".");
+  if (typeof input == "number") return [input];
+  return [];
+};
 
 const extendPath = (path: Path, prop: string | number): Path =>
   path.concat([prop]) as Path;
@@ -188,7 +202,7 @@ const compileOptional = (inner: Validator, fallback: unknown, path: Path): FnV =
 };
 
 const isOptional = (v: Validator, path: Path): boolean =>
-  stepType(Array.isArray(v) ? v[0] : v, path) == optionalType;
+  Array.isArray(v) ? isOptional(v[0], path): stepType(v, path) == optionalType;
 
 // ------------------------------------------------------------------------------------------------
 
